@@ -31,17 +31,7 @@ You need Node 24 or later, Docker, and a free [Clerk](https://clerk.com) account
 npm install
 ```
 
-### 2. Start Convex
-
-Run this in its own terminal and leave it running:
-
-```bash
-CONVEX_AGENT_MODE=anonymous npx convex dev
-```
-
-This runs a local Convex backend with no account and writes the Convex values to `.env.local`. To use a Convex cloud project instead, run `npx convex dev` and see [Using Convex cloud](#using-convex-cloud).
-
-### 3. Set up Clerk
+### 2. Set up Clerk
 
 1. Create an application in the Clerk dashboard, with email sign-in enabled.
 2. Activate the [Convex integration](https://dashboard.clerk.com/apps/setup/convex) and copy the Frontend API URL it shows you.
@@ -62,11 +52,28 @@ This runs a local Convex backend with no account and writes the Convex values to
    CLERK_SECRET_KEY=sk_test_...
    ```
 
-5. Tell Convex which issuer to trust:
+### 3. Start Convex
 
-   ```bash
-   npx convex env set CLERK_JWT_ISSUER_DOMAIN https://your-app.clerk.accounts.dev
-   ```
+Create the local deployment. This runs a Convex backend with no account and writes the Convex values to `.env.local`:
+
+```bash
+export CONVEX_AGENT_MODE=anonymous
+npx convex dev --once
+```
+
+This first run stops with `CLERK_JWT_ISSUER_DOMAIN is used in auth config file but its value was not set`. That's expected: Convex won't deploy until it knows which issuer to trust, and the deployment now exists to set it on. Use the Frontend API URL from Clerk:
+
+```bash
+npx convex env set CLERK_JWT_ISSUER_DOMAIN https://your-app.clerk.accounts.dev
+```
+
+Then start Convex in its own terminal and leave it running. In a new terminal, run the `export` line first:
+
+```bash
+npx convex dev
+```
+
+In PowerShell, use `$env:CONVEX_AGENT_MODE = "anonymous"` instead of `export`. To use a Convex cloud project, leave that variable unset and see [Using Convex cloud](#using-convex-cloud).
 
 ### 4. Start automation
 

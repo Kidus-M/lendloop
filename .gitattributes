@@ -1,0 +1,4 @@
+# Keep LF everywhere so scripts mounted into Linux containers run on any host.
+* text=auto eol=lf
+*.png binary
+*.ico binary

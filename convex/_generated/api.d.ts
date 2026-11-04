@@ -9,7 +9,9 @@
  */
 
 import type * as admin from "../admin.js";
+import type * as automation from "../automation.js";
 import type * as crons from "../crons.js";
+import type * as http from "../http.js";
 import type * as lib_audit from "../lib/audit.js";
 import type * as lib_automation from "../lib/automation.js";
 import type * as lib_availability from "../lib/availability.js";
@@ -17,6 +19,7 @@ import type * as lib_domain from "../lib/domain.js";
 import type * as lib_errors from "../lib/errors.js";
 import type * as lib_events from "../lib/events.js";
 import type * as lib_functions from "../lib/functions.js";
+import type * as lib_httpAuth from "../lib/httpAuth.js";
 import type * as lib_policies from "../lib/policies.js";
 import type * as lib_signing from "../lib/signing.js";
 import type * as lib_text from "../lib/text.js";
@@ -36,7 +39,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
+  automation: typeof automation;
   crons: typeof crons;
+  http: typeof http;
   "lib/audit": typeof lib_audit;
   "lib/automation": typeof lib_automation;
   "lib/availability": typeof lib_availability;
@@ -44,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   "lib/errors": typeof lib_errors;
   "lib/events": typeof lib_events;
   "lib/functions": typeof lib_functions;
+  "lib/httpAuth": typeof lib_httpAuth;
   "lib/policies": typeof lib_policies;
   "lib/signing": typeof lib_signing;
   "lib/text": typeof lib_text;

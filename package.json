@@ -10,7 +10,10 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check": "npm run lint && npm run typecheck && npm test"
+    "check": "npm run lint && npm run typecheck && npm test && npm run check:workflows",
+    "setup:secrets": "node scripts/setup-secrets.mjs",
+    "smoke:webhook": "node scripts/smoke-webhook.mjs",
+    "check:workflows": "node scripts/check-workflows.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.24",

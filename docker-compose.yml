@@ -1,0 +1,104 @@
+# Local automation stack: n8n, its task runner sidecar, and Mailpit as a mail catcher.
+# Run `npm run setup:secrets` once to create .env, then `docker compose up -d`.
+#
+# Every port binds to 127.0.0.1, so nothing here is reachable from the network.
+
+name: lendloop
+
+x-n8n-common: &n8n-common
+  image: n8nio/n8n:2.46.6
+  volumes:
+    - n8n_data:/home/node/.n8n
+
+services:
+  # One-shot job: loads credentials and workflows, then exits. It is the only
+  # container that ever sees the signing secrets as environment variables.
+  n8n-bootstrap:
+    <<: *n8n-common
+    entrypoint: ["/bin/sh", "/bootstrap/scripts/bootstrap.sh"]
+    environment:
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?Run npm run setup:secrets first}
+      LENDLOOP_TO_N8N_SECRET: ${LENDLOOP_TO_N8N_SECRET:?Run npm run setup:secrets first}
+      N8N_TO_LENDLOOP_SECRET: ${N8N_TO_LENDLOOP_SECRET:?Run npm run setup:secrets first}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/bootstrap:/bootstrap/scripts:ro
+      - ./n8n/workflows:/bootstrap/workflows:ro
+    restart: "no"
+
+  n8n:
+    <<: *n8n-common
+    depends_on:
+      n8n-bootstrap:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      N8N_HOST: localhost
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      WEBHOOK_URL: http://localhost:5678/
+      GENERIC_TIMEZONE: UTC
+      TZ: UTC
+
+      # Encrypts stored credentials, so losing it means re-importing them.
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?Run npm run setup:secrets first}
+
+      # Code nodes run in a separate container with no secrets in its environment.
+      N8N_RUNNERS_MODE: external
+      N8N_RUNNERS_BROKER_LISTEN_ADDRESS: 0.0.0.0
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN:?Run npm run setup:secrets first}
+
+      # Workflows read this one non-secret URL through $env. Signing secrets are
+      # not in this container's environment, so $env can't expose them.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      LENDLOOP_CONVEX_SITE_URL: ${LENDLOOP_CONVEX_SITE_URL:-http://host.docker.internal:3211}
+      LENDLOOP_OPS_EMAIL: ${LENDLOOP_OPS_EMAIL:-ops@lendloop.test}
+
+      # Data minimization: successful runs hold email addresses, so they are not
+      # stored. Failed runs are kept for debugging and pruned after seven days.
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: none
+      EXECUTIONS_DATA_SAVE_ON_ERROR: all
+      EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS: "false"
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: 168
+
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+
+      # Local HTTP only. Remove this behind HTTPS.
+      N8N_SECURE_COOKIE: "false"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5678/healthz >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  n8n-runners:
+    image: n8nio/runners:2.46.6
+    depends_on:
+      - n8n
+    environment:
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n:5679
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN:?Run npm run setup:secrets first}
+    restart: unless-stopped
+
+  # Catches outgoing mail so the workflows run for real with no email account.
+  # Read it at http://localhost:8025.
+  mailpit:
+    image: axllent/mailpit:v1.33.0
+    ports:
+      - "127.0.0.1:8025:8025"
+    restart: unless-stopped
+
+volumes:
+  n8n_data:

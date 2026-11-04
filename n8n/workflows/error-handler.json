@@ -1,0 +1,201 @@
+{
+  "id": "lendloopErrors01",
+  "name": "LendLoop: error handler",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "00000000-0000-4000-8000-000000000042",
+      "name": "When a workflow fails",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000043",
+      "name": "Summarize failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Error messages can quote input data, so addresses are masked before leaving n8n.\nconst { execution, trigger, workflow } = $input.first().json;\nconst error = execution?.error ?? trigger?.error;\nconst message = String(error?.message ?? \"Unknown error\")\n  .replace(/[\\w.+-]+@[\\w-]+\\.[\\w.-]+/g, \"[email]\")\n  .slice(0, 300);\n\nreturn [{\n  json: {\n    key: `execution:${execution?.id ?? `${workflow?.id}:${Date.now()}`}`,\n    workflow: String(workflow?.name ?? \"Unknown workflow\").slice(0, 120),\n    node: execution?.lastNodeExecuted?.slice(0, 120),\n    message,\n  },\n}];"
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000044",
+      "name": "Build report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        200
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const { key, workflow, node, message } = $input.first().json;\nconst body = JSON.stringify({ key, workflow, node, message });\nconst timestamp = String(Math.floor(Date.now() / 1000));\nreturn [{\n  json: { body, timestamp, signingString: `${timestamp}.POST./n8n/failures.${body}` },\n}];"
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000045",
+      "name": "Sign report",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [
+        660,
+        200
+      ],
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.signingString }}",
+        "dataPropertyName": "signature",
+        "encoding": "hex"
+      },
+      "credentials": {
+        "crypto": {
+          "id": "lendloopHmacOut1",
+          "name": "n8n to LendLoop signing key"
+        }
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000046",
+      "name": "Report to LendLoop",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LENDLOOP_CONVEX_SITE_URL }}/n8n/failures",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-lendloop-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-lendloop-signature",
+              "value": "=v1={{ $json.signature }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.body }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000047",
+      "name": "Alert operations",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        440,
+        420
+      ],
+      "parameters": {
+        "fromEmail": "LendLoop <notifications@lendloop.test>",
+        "toEmail": "={{ $env.LENDLOOP_OPS_EMAIL }}",
+        "subject": "={{ `Automation failed: ${$json.workflow}` }}",
+        "emailFormat": "text",
+        "text": "={{ `${$json.workflow} failed at ${$json.node ?? 'an unknown step'}.\\n\\n${$json.message}\\n\\nReference: ${$json.key}` }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "smtp": {
+          "id": "lendloopSmtp0001",
+          "name": "LendLoop mail"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "connections": {
+    "When a workflow fails": {
+      "main": [
+        [
+          {
+            "node": "Summarize failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize failure": {
+      "main": [
+        [
+          {
+            "node": "Build report",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Alert operations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build report": {
+      "main": [
+        [
+          {
+            "node": "Sign report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign report": {
+      "main": [
+        [
+          {
+            "node": "Report to LendLoop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all",
+    "saveManualExecutions": false
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "ae6fe492-96dc-447e-9aba-5c11a1ba96fc",
+  "tags": []
+}

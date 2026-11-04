@@ -15,7 +15,7 @@ export default defineSchema({
   /**
    * Convex is the source of truth for authorization. Clerk proves who someone
    * is; `role` here decides what they may do, and no public mutation writes it.
-   * Only a first name and an email are kept, because nothing needs more.
+   * Only a first name and a verified email are kept, because nothing needs more.
    */
   users: defineTable({
     tokenIdentifier: v.string(),
@@ -27,8 +27,7 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
   })
     .index("by_token", ["tokenIdentifier"])
-    .index("by_clerk_id", ["clerkId"])
-    .index("by_email", ["email"]),
+    .index("by_clerk_id", ["clerkId"]),
 
   /**
    * `status` is stored rather than derived at read time. A Convex query is only

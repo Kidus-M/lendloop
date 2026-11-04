@@ -479,7 +479,13 @@ describe("the Clerk webhook", () => {
         id: "clerk_Ana",
         first_name: "Anabel",
         primary_email_address_id: "e1",
-        email_addresses: [{ id: "e1", email_address: "anabel@example.com" }],
+        email_addresses: [
+          {
+            id: "e1",
+            email_address: "anabel@example.com",
+            verification: { status: "verified" },
+          },
+        ],
       },
     });
 
@@ -489,5 +495,31 @@ describe("the Clerk webhook", () => {
       name: "Anabel",
       email: "anabel@example.com",
     });
+  });
+
+  it("ignores an unverified primary email", async () => {
+    const t = startBackend();
+    const person = await addPerson(t, "Ana");
+    const body = JSON.stringify({
+      type: "user.updated",
+      data: {
+        id: "clerk_Ana",
+        first_name: "Ana",
+        primary_email_address_id: "e1",
+        email_addresses: [
+          {
+            id: "e1",
+            email_address: "someone-else@example.com",
+            verification: { status: "unverified" },
+          },
+        ],
+      },
+    });
+
+    await t.fetch("/clerk/webhook", { method: "POST", headers: signClerk(body), body });
+
+    expect((await t.run((ctx) => ctx.db.get(person.id)))?.email).toBe(
+      "ana@example.com",
+    );
   });
 });

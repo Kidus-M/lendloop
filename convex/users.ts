@@ -27,7 +27,8 @@ export const ensureCurrent = identityMutation({
     if (!identity) fail("unauthenticated", "Sign in to continue.");
 
     const name = firstName(identity.givenName ?? identity.name);
-    const email = identity.email;
+    const tokenEmail =
+      identity.emailVerified === false ? undefined : identity.email;
 
     const existing = await ctx.db
       .query("users")
@@ -37,6 +38,8 @@ export const ensureCurrent = identityMutation({
       .unique();
 
     if (existing) {
+      // Falls back to the stored address: patching `undefined` would delete the field.
+      const email = tokenEmail ?? existing.email;
       if (existing.name !== name || existing.email !== email) {
         await ctx.db.patch(existing._id, { name, email });
       }
@@ -47,7 +50,7 @@ export const ensureCurrent = identityMutation({
       tokenIdentifier: identity.tokenIdentifier,
       clerkId: identity.subject,
       name,
-      email,
+      email: tokenEmail,
       role: "user",
       trustedLender: false,
     });
@@ -73,7 +76,11 @@ export const applyClerkUpdate = internalMutation({
   handler: async (ctx, { clerkId, firstName: given, email }) => {
     const user = await findByClerkId(ctx, clerkId);
     if (!user || user.deletedAt !== undefined) return;
-    await ctx.db.patch(user._id, { name: firstName(given), email });
+    // Without a verified address, keep the one on file rather than erase it.
+    await ctx.db.patch(user._id, {
+      name: firstName(given),
+      email: email ?? user.email,
+    });
   },
 });
 

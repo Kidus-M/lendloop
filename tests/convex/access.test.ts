@@ -78,6 +78,29 @@ describe("account provisioning", () => {
     expect((await admin.as.query(api.users.me, {})).role).toBe("admin");
   });
 
+  it("doesn't store an unverified email", async () => {
+    const t = startBackend();
+    const person = t.withIdentity({
+      tokenIdentifier: "test|unverified",
+      subject: "clerk_unverified",
+      email: "someone-else@example.com",
+      emailVerified: false,
+    });
+    const id = await person.mutation(api.users.ensureCurrent, {});
+    expect((await t.run((ctx) => ctx.db.get(id)))?.email).toBeUndefined();
+  });
+
+  it("keeps the stored email when a token has no email claim", async () => {
+    const t = startBackend();
+    const person = await addPerson(t, "Ana");
+
+    await person.as.mutation(api.users.ensureCurrent, {});
+
+    expect((await t.run((ctx) => ctx.db.get(person.id)))?.email).toBe(
+      "ana@example.com",
+    );
+  });
+
   it("stores only the first name", async () => {
     const t = startBackend();
     const person = t.withIdentity({
@@ -259,10 +282,20 @@ describe("admin", () => {
     const person = await addPerson(t, "Ana");
 
     await t.mutation(internal.admin.setRole, {
-      email: "ana@example.com",
+      clerkId: "clerk_Ana",
       role: "admin",
     });
     expect((await person.as.query(api.users.me, {})).role).toBe("admin");
+  });
+
+  it("refuses to grant a role to a deleted account", async () => {
+    const t = startBackend();
+    await addPerson(t, "Ana");
+    await t.mutation(internal.users.applyClerkDeletion, { clerkId: "clerk_Ana" });
+
+    await expect(
+      t.mutation(internal.admin.setRole, { clerkId: "clerk_Ana", role: "admin" }),
+    ).rejects.toThrow("No active user");
   });
 });
 

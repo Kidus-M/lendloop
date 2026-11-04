@@ -93,7 +93,13 @@ const clerkEvent = z.object({
     first_name: z.string().nullish(),
     primary_email_address_id: z.string().nullish(),
     email_addresses: z
-      .array(z.object({ id: z.string(), email_address: z.string() }))
+      .array(
+        z.object({
+          id: z.string(),
+          email_address: z.string(),
+          verification: z.object({ status: z.string() }).nullish(),
+        }),
+      )
       .optional(),
   }),
 });
@@ -140,7 +146,10 @@ http.route({
       await ctx.runMutation(internal.users.applyClerkUpdate, {
         clerkId,
         firstName: data.first_name ?? undefined,
-        email: primary?.email_address,
+        email:
+          primary?.verification?.status === "verified"
+            ? primary.email_address
+            : undefined,
       });
     }
     return json(200, { ok: true });

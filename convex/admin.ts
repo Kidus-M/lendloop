@@ -179,16 +179,21 @@ export const retryDelivery = adminMutation({
 /**
  * Deliberately internal: there is no way to grant a role through the app or
  * from a browser. It runs only with deployment credentials:
- *   npx convex run admin:setRole '{"email":"you@example.com","role":"admin"}'
+ *   npx convex run admin:setRole '{"clerkId":"user_abc123","role":"admin"}'
+ *
+ * The target is the immutable Clerk user ID, not an email. Emails can change
+ * and be reused, which makes them the wrong key for granting privilege.
  */
 export const setRole = internalMutation({
-  args: { email: v.string(), role: roleValidator },
-  handler: async (ctx, { email, role }) => {
+  args: { clerkId: v.string(), role: roleValidator },
+  handler: async (ctx, { clerkId, role }) => {
     const user = await ctx.db
       .query("users")
-      .withIndex("by_email", (q) => q.eq("email", email))
-      .first();
-    if (!user) throw new Error("No user with that email has signed in yet.");
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkId))
+      .unique();
+    if (!user || user.deletedAt !== undefined) {
+      throw new Error("No active user with that Clerk ID has signed in yet.");
+    }
 
     await ctx.db.patch(user._id, { role });
     await audit(ctx, "cli", "user.role_set", { table: "users", id: user._id }, role);

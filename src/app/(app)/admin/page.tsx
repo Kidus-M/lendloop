@@ -50,6 +50,14 @@ function AutomationHealth({ health }: { health: Health }) {
           {health.queued} waiting to send, {health.awaitingConfirmation} waiting for
           confirmation
         </p>
+        {health.accountsWithoutEmail > 0 && (
+          <p className="font-bold text-signal">
+            <TriangleAlert className="mr-1 inline size-4" aria-hidden="true" />
+            {health.accountsWithoutEmail === 1
+              ? "1 account has no email address and can't get notifications"
+              : `${health.accountsWithoutEmail} accounts have no email address and can't get notifications`}
+          </p>
+        )}
       </div>
 
       {allClear && <p className="text-go">No failed notifications or runs.</p>}

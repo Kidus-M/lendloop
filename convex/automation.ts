@@ -37,15 +37,18 @@ export const pollOverdue = internalMutation({
       });
     }
 
-    const overdue = await ctx.db
+    const overdue = ctx.db
       .query("loans")
       .withIndex("by_status_end", (q) =>
         q.eq("status", "approved").lt("endDate", today),
-      )
-      .take(OVERDUE_BATCH);
+      );
 
+    // The cap applies to loans returned, not loans read. Otherwise loans already
+    // reminded today could fill the batch and starve the ones behind them.
     const loans = [];
-    for (const loan of overdue) {
+    for await (const loan of overdue) {
+      if (loans.length >= OVERDUE_BATCH) break;
+
       const key = reminderKey(loan._id, today);
       const sent = await ctx.db
         .query("loanActivity")

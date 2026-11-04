@@ -45,14 +45,24 @@ This runs a local Convex backend with no account and writes the Convex values to
 
 1. Create an application in the Clerk dashboard, with email sign-in enabled.
 2. Activate the [Convex integration](https://dashboard.clerk.com/apps/setup/convex) and copy the Frontend API URL it shows you.
-3. Add your API keys to `.env.local`:
+3. Under **Sessions**, in **Customize session token**, add the claims LendLoop needs to send email:
+
+   ```json
+   {
+     "email": "{{user.primary_email_address}}",
+     "email_verified": "{{user.email_verified}}",
+     "given_name": "{{user.first_name}}"
+   }
+   ```
+
+4. Add your API keys to `.env.local`:
 
    ```
    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
    CLERK_SECRET_KEY=sk_test_...
    ```
 
-4. Tell Convex which issuer to trust:
+5. Tell Convex which issuer to trust:
 
    ```bash
    npx convex env set CLERK_JWT_ISSUER_DOMAIN https://your-app.clerk.accounts.dev
@@ -322,6 +332,7 @@ Failed work always ends up somewhere a person can see it. Admins get an Automati
 | n8n accepts an event, then crashes | A sweep fails anything unconfirmed after 15 minutes | Admin panel |
 | A delivery action crashes | A cron re-dispatches stranded rows every 5 minutes | Normal retry |
 | The daily schedule stops firing | Nothing errors, so each poll records a heartbeat instead | Admin panel warns after 26 hours |
+| An account has no email address | Its notifications are skipped | Admin panel shows a count |
 | A workflow fails | The error workflow records it and emails operations | Admin panel, ops inbox |
 
 The heartbeat matters because a schedule that never fires produces no errors at all, so an error workflow alone would never notice.

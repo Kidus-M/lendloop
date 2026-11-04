@@ -124,6 +124,18 @@ export const applyClerkDeletion = internalMutation({
       await ctx.db.patch(loan._id, { status: "cancelled" });
     }
 
+    // Only the lender can mark a loan returned. With the lender gone, an open
+    // loan could never close and its borrower would get reminders forever.
+    const lent = await ctx.db
+      .query("loans")
+      .withIndex("by_lender", (q) => q.eq("lenderId", user._id))
+      .collect();
+    for (const loan of lent) {
+      if (loan.status === "approved") {
+        await ctx.db.patch(loan._id, { status: "cancelled" });
+      }
+    }
+
     await audit(ctx, "system", "user.deleted", { table: "users", id: user._id });
   },
 });

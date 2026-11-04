@@ -163,6 +163,48 @@ describe("overdue reminders", () => {
     });
   });
 
+  it("doesn't let already-reminded loans starve the ones behind them", async () => {
+    const t = startBackend();
+    const owner = await addPerson(t, "Ana");
+    const borrower = await addPerson(t, "Ben");
+    const toolId = await listTool(owner);
+
+    const insertLoan = (endDate: string) =>
+      t.run((ctx) =>
+        ctx.db.insert("loans", {
+          toolId,
+          lenderId: owner.id,
+          borrowerId: borrower.id,
+          startDate: "2026-06-01",
+          endDate,
+          status: "approved",
+        }),
+      );
+
+    for (let i = 0; i < 200; i += 1) {
+      const loanId = await insertLoan("2026-06-10");
+      await t.mutation(internal.automation.recordReminder, {
+        reminderKey: `reminder:${loanId}:${TODAY}`,
+        status: "sent",
+      });
+    }
+    const waiting = await insertLoan("2026-06-12");
+
+    const { loans } = await t.mutation(internal.automation.pollOverdue, {});
+    expect(loans.map((loan) => loan.reminderKey)).toEqual([
+      `reminder:${waiting}:${TODAY}`,
+    ]);
+  });
+
+  it("stops reminding when the lender deletes their account", async () => {
+    const t = startBackend();
+    await overdueLoan(t);
+
+    await t.mutation(internal.users.applyClerkDeletion, { clerkId: "clerk_Ana" });
+
+    expect((await t.mutation(internal.automation.pollOverdue, {})).loans).toEqual([]);
+  });
+
   it("writes one record however many times n8n retries", async () => {
     const t = startBackend();
     const { loanId } = await overdueLoan(t);
@@ -231,6 +273,16 @@ describe("overdue reminders", () => {
     const body = JSON.stringify({ reminderKey: "reminder:nope:2026-06-19", status: "sent" });
     const response = await signed(t, "POST", "/n8n/reminders", body);
     expect(response.status).toBe(404);
+  });
+
+  it("shows admins which accounts can't be notified", async () => {
+    const t = startBackend();
+    const admin = await addPerson(t, "Root", "admin");
+    const noEmail = t.withIdentity({ tokenIdentifier: "test|bare", subject: "clerk_bare" });
+    await noEmail.mutation(api.users.ensureCurrent, {});
+
+    const health = await admin.as.query(api.admin.automationHealth, {});
+    expect(health.accountsWithoutEmail).toBe(1);
   });
 
   it("shows admins when the schedule last ran", async () => {

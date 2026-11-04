@@ -106,7 +106,7 @@ export const removeListing = adminMutation({
 export const automationHealth = adminQuery({
   args: {},
   handler: async (ctx) => {
-    const [pending, accepted, failed, failures, heartbeat] = await Promise.all([
+    const [pending, accepted, failed, failures, heartbeat, users] = await Promise.all([
       ctx.db
         .query("outbox")
         .withIndex("by_status_next_attempt", (q) => q.eq("status", "pending"))
@@ -129,11 +129,16 @@ export const automationHealth = adminQuery({
         .query("heartbeats")
         .withIndex("by_name", (q) => q.eq("name", HEARTBEAT_OVERDUE_POLL))
         .unique(),
+      ctx.db.query("users").take(COUNT_LIMIT),
     ]);
 
     return {
       queued: pending.length,
       awaitingConfirmation: accepted.length,
+      // Their notifications are skipped, so a missing email claim must not go unnoticed.
+      accountsWithoutEmail: users.filter(
+        (user) => user.deletedAt === undefined && !user.email,
+      ).length,
       overduePollLastSeenAt: heartbeat?.lastSeenAt ?? null,
       failedDeliveries: failed.map((row) => ({
         id: row._id,

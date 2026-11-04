@@ -13,6 +13,8 @@ export default clerkMiddleware({
     directives: {
       "connect-src": [convexUrl, convexUrl.replace(/^http/, "ws")],
       "font-src": ["'self'"],
+      // Clerk's sign-in modal uses inline images. Images can't execute scripts.
+      "img-src": ["data:"],
       "object-src": ["'none'"],
       "base-uri": ["'self'"],
       "form-action": ["'self'"],
